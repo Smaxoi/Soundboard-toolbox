@@ -7,6 +7,75 @@ namespace
 }
 
 //==============================================================================
+//  HotkeyButton —— 可綁全域熱鍵的按鈕（停止鈕用）
+//==============================================================================
+SoundboardComponent::HotkeyButton::HotkeyButton (const juce::String& text)
+    : juce::TextButton (text)
+{
+    setWantsKeyboardFocus (true);
+}
+
+void SoundboardComponent::HotkeyButton::clicked()
+{
+    if (onTriggered) onTriggered();
+}
+
+void SoundboardComponent::HotkeyButton::mouseDown (const juce::MouseEvent& e)
+{
+    if (e.mods.isPopupMenu()) showMenu();
+    else juce::TextButton::mouseDown (e);   // 正常左鍵點擊
+}
+
+bool SoundboardComponent::HotkeyButton::keyPressed (const juce::KeyPress& kp)
+{
+    if (! awaitingHotkey)
+        return false;
+
+    if (kp == juce::KeyPress::escapeKey) { awaitingHotkey = false; repaint(); return true; }
+
+    int vk = 0, mods = 0;
+    if (GlobalHotkeys::keyPressToVk (kp, vk, mods))
+    {
+        awaitingHotkey = false;
+        hotkeyVk = vk; hotkeyMods = mods;
+        if (onHotkeyChanged) onHotkeyChanged (vk, mods);
+        repaint();
+    }
+    return true;
+}
+
+void SoundboardComponent::HotkeyButton::paintButton (juce::Graphics& g, bool over, bool down)
+{
+    juce::TextButton::paintButton (g, over, down);
+
+    if (awaitingHotkey)
+    {
+        g.setColour (juce::Colours::yellow);
+        g.setFont (11.0f);
+        g.drawText (utf8 ("按鍵…"), getLocalBounds(), juce::Justification::centred);
+    }
+    else if (hotkeyVk != 0)
+    {
+        g.setColour (juce::Colours::yellow.withAlpha (0.9f));
+        g.setFont (10.0f);
+        g.drawText (GlobalHotkeys::describe (hotkeyVk, hotkeyMods),
+                    getLocalBounds().reduced (3), juce::Justification::bottomRight);
+    }
+}
+
+void SoundboardComponent::HotkeyButton::showMenu()
+{
+    juce::PopupMenu m;
+    m.addItem (1, hotkeyVk == 0 ? utf8 ("設定熱鍵…") : utf8 ("變更熱鍵…"));
+    m.addItem (2, utf8 ("清除熱鍵"), hotkeyVk != 0);
+    m.showMenuAsync (juce::PopupMenu::Options(), [this] (int r)
+    {
+        if (r == 1)      { awaitingHotkey = true; grabKeyboardFocus(); repaint(); }
+        else if (r == 2) { hotkeyVk = 0; hotkeyMods = 0; if (onHotkeyChanged) onHotkeyChanged (0, 0); repaint(); }
+    });
+}
+
+//==============================================================================
 //  Pad —— 單一音效格
 //==============================================================================
 SoundboardComponent::Pad::Pad (SoundboardComponent& o) : owner (o)
@@ -44,6 +113,36 @@ void SoundboardComponent::Pad::paint (juce::Graphics& g)
                     juce::Justification::topLeft);
     }
 
+    // 迴圈標記（右上角 ↻）
+    if (loopMode)
+    {
+        g.setColour (isLooping ? juce::Colours::limegreen : juce::Colours::white.withAlpha (0.55f));
+        g.setFont (16.0f);
+        g.drawText (utf8 ("↻"), getLocalBounds().reduced (7).removeFromTop (18),
+                    juce::Justification::topRight);
+    }
+
+    // 音量非 100% -> 右下角顯示倍率
+    if (clip != nullptr && std::abs (padGain - 1.0f) > 0.01f)
+    {
+        g.setColour (juce::Colours::white.withAlpha (0.6f));
+        g.setFont (11.0f);
+        g.drawText (juce::String (padGain, 2) + "x",
+                    getLocalBounds().reduced (6), juce::Justification::bottomRight);
+    }
+
+    // 正在迴圈：綠色外框；拖放游標在上方：黃色外框
+    if (isLooping)
+    {
+        g.setColour (juce::Colours::limegreen);
+        g.drawRoundedRectangle (bounds, 8.0f, 2.0f);
+    }
+    if (dragOver)
+    {
+        g.setColour (juce::Colours::yellow);
+        g.drawRoundedRectangle (bounds, 8.0f, 2.0f);
+    }
+
     // 等待使用者按鍵時的提示
     if (awaitingHotkey)
     {
@@ -77,6 +176,7 @@ void SoundboardComponent::Pad::assign (AudioClip::Ptr clipToUse, const juce::Fil
     clip = clipToUse;
     file = sourceFile;
     customName = {};        // 載入新音效時清掉舊的自訂名稱（loadPads 之後會再還原）
+    isLooping = false;
     repaint();
 }
 
@@ -91,6 +191,9 @@ void SoundboardComponent::Pad::clearSound()
     clip = nullptr;
     file = juce::File();
     customName = {};
+    padGain = 1.0f;
+    loopMode = false;
+    isLooping = false;
     repaint();
 }
 
@@ -99,6 +202,9 @@ void SoundboardComponent::Pad::fullClear()
     clip = nullptr;
     file = juce::File();
     customName = {};
+    padGain = 1.0f;
+    loopMode = false;
+    isLooping = false;
     hotkeyVk = 0;
     hotkeyMods = 0;
     repaint();
@@ -109,12 +215,87 @@ void SoundboardComponent::Pad::play()
     if (clip == nullptr)
         return;
 
-    owner.engine.trigger (clip, 1.0f);
+    if (loopMode)
+    {
+        if (isLooping) { owner.engine.stopClip (clip.get()); isLooping = false; }   // 再按一下：停
+        else           { owner.engine.trigger (clip, padGain, true); isLooping = true; }
+    }
+    else
+    {
+        owner.engine.trigger (clip, padGain, false);
+    }
 
     flash = 1.0f;          // 視覺回饋：亮一下，再由 timer 淡出
     startTimerHz (60);
     repaint();
 }
+
+void SoundboardComponent::Pad::onStopped()
+{
+    isLooping = false;
+    repaint();
+}
+
+void SoundboardComponent::Pad::setPadGain (float g)
+{
+    padGain = juce::jlimit (0.0f, 2.0f, g);
+}
+
+void SoundboardComponent::Pad::setLoopMode (bool b)
+{
+    loopMode = b;
+    if (! b) isLooping = false;
+    repaint();
+}
+
+void SoundboardComponent::Pad::loadFromFile (const juce::File& f)
+{
+    juce::String err;
+    auto loaded = owner.engine.loadClip (f, err);
+    if (loaded == nullptr)
+    {
+        juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon, utf8 ("載入失敗"), err);
+        return;
+    }
+    assign (loaded, f);
+    owner.savePads();
+}
+
+void SoundboardComponent::Pad::showVolumePopup()
+{
+    auto slider = std::make_unique<juce::Slider> (juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight);
+    slider->setSize (220, 36);
+    slider->setRange (0.0, 2.0, 0.01);
+    slider->setValue (padGain, juce::dontSendNotification);
+    slider->setTextValueSuffix ("x");
+
+    auto* raw = slider.get();
+    raw->onValueChange = [this, raw] { setPadGain ((float) raw->getValue()); owner.savePads(); repaint(); };
+
+    juce::CallOutBox::launchAsynchronously (std::move (slider), getScreenBounds(), nullptr);
+}
+
+bool SoundboardComponent::Pad::isInterestedInFileDrag (const juce::StringArray& files)
+{
+    for (auto& f : files)
+        if (f.endsWithIgnoreCase (".wav")  || f.endsWithIgnoreCase (".mp3") || f.endsWithIgnoreCase (".flac")
+         || f.endsWithIgnoreCase (".ogg")  || f.endsWithIgnoreCase (".aif") || f.endsWithIgnoreCase (".aiff")
+         || f.endsWithIgnoreCase (".m4a")  || f.endsWithIgnoreCase (".mp4") || f.endsWithIgnoreCase (".aac")
+         || f.endsWithIgnoreCase (".mov")  || f.endsWithIgnoreCase (".wma"))
+            return true;
+    return false;
+}
+
+void SoundboardComponent::Pad::filesDropped (const juce::StringArray& files, int, int)
+{
+    dragOver = false;
+    repaint();
+    if (files.size() > 0)
+        loadFromFile (juce::File (files[0]));
+}
+
+void SoundboardComponent::Pad::fileDragEnter (const juce::StringArray&, int, int) { dragOver = true;  repaint(); }
+void SoundboardComponent::Pad::fileDragExit  (const juce::StringArray&)           { dragOver = false; repaint(); }
 
 void SoundboardComponent::Pad::timerCallback()
 {
@@ -135,7 +316,9 @@ void SoundboardComponent::Pad::showMenu()
     juce::PopupMenu m;
     m.addItem (1, clip == nullptr ? utf8 ("載入音效…") : utf8 ("替換音效…"));
     m.addItem (5, utf8 ("重新命名…"), clip != nullptr);
-    m.addItem (2, utf8 ("清除音效"), clip != nullptr);
+    m.addItem (6, utf8 ("音量…"),     clip != nullptr);
+    m.addItem (7, utf8 ("循環播放"),  clip != nullptr, loopMode);   // 打勾=已開
+    m.addItem (2, utf8 ("清除音效"),  clip != nullptr);
     m.addSeparator();
     m.addItem (3, hotkeyVk == 0 ? utf8 ("設定熱鍵…") : utf8 ("變更熱鍵…"));
     m.addItem (4, utf8 ("清除熱鍵"), hotkeyVk != 0);
@@ -144,6 +327,8 @@ void SoundboardComponent::Pad::showMenu()
     {
         if      (result == 1) loadFile();
         else if (result == 5) renamePad();
+        else if (result == 6) showVolumePopup();
+        else if (result == 7) { setLoopMode (! loopMode); owner.savePads(); }
         else if (result == 2) { clearSound(); owner.savePads(); }
         else if (result == 3) captureHotkey();
         else if (result == 4) owner.assignHotkey (*this, 0, 0);
@@ -163,21 +348,8 @@ void SoundboardComponent::Pad::loadFile()
     chooser->launchAsync (chooserFlags, [this] (const juce::FileChooser& fc)
     {
         const auto chosen = fc.getResult();
-        if (chosen == juce::File())
-            return;
-
-        juce::String err;
-        auto loaded = owner.engine.loadClip (chosen, err);
-
-        if (loaded == nullptr)
-        {
-            juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon,
-                                                    utf8 ("載入失敗"), err);
-            return;
-        }
-
-        assign (loaded, chosen);
-        owner.savePads();
+        if (chosen != juce::File())
+            loadFromFile (chosen);
     });
 }
 
@@ -312,6 +484,7 @@ SoundboardComponent::SoundboardComponent()
     // 全域熱鍵被按下 -> 觸發對應索引的格子
     hotkeys.onHotkey = [this] (int id)
     {
+        if (id == kStopHotkeyId) { stopAllAction(); return; }
         if (id >= 0 && id < pads.size())
             pads[id]->play();
     };
@@ -344,6 +517,24 @@ SoundboardComponent::SoundboardComponent()
     deviceButton.onClick = [this] { openDeviceSettings(); };
     addAndMakeVisible (deviceButton);
 
+    // 停止全部（按鈕 + 可綁全域熱鍵）
+    stopButton.onTriggered = [this] { stopAllAction(); };
+    stopButton.onHotkeyChanged = [this] (int vk, int mods)
+    {
+        stopHotkeyVk = vk; stopHotkeyMods = mods;
+        refreshHotkeys();
+        if (settings != nullptr)
+        {
+            settings->setValue ("stopKey", vk);
+            settings->setValue ("stopMod", mods);
+            settings->saveIfNeeded();
+        }
+    };
+    stopHotkeyVk   = settings->getIntValue ("stopKey", 0);
+    stopHotkeyMods = settings->getIntValue ("stopMod", 0);
+    stopButton.setHotkey (stopHotkeyVk, stopHotkeyMods);
+    addAndMakeVisible (stopButton);
+
     // 頁面列控制項
     prevPageBtn.setButtonText (utf8 ("◀"));
     prevPageBtn.onClick = [this] { setCurrentPage (currentPage - 1); };
@@ -361,8 +552,7 @@ SoundboardComponent::SoundboardComponent()
     delPageBtn.onClick = [this] { deletePage(); };
     addAndMakeVisible (delPageBtn);
 
-    pageIndicator.setJustificationType (juce::Justification::centred);
-    pageIndicator.setColour (juce::Label::textColourId, juce::Colours::white);
+    pageIndicator.onStep = [this] (int d) { setCurrentPage (currentPage + d); };
     addAndMakeVisible (pageIndicator);
 
     pageNameLabel.setJustificationType (juce::Justification::centred);
@@ -426,12 +616,14 @@ void SoundboardComponent::resized()
 {
     auto r = getLocalBounds().reduced (12);
 
-    // 第一列：標題 + 清除全部 + 裝置設定
+    // 第一列：標題 + 停止 + 清除全部 + 裝置設定
     auto topRow = r.removeFromTop (34);
-    title.setBounds (topRow.removeFromLeft (200));
-    deviceButton.setBounds (topRow.removeFromRight (140));
-    topRow.removeFromRight (8);
-    clearAllButton.setBounds (topRow.removeFromRight (90));
+    title.setBounds (topRow.removeFromLeft (160));
+    deviceButton.setBounds (topRow.removeFromRight (130));
+    topRow.removeFromRight (6);
+    clearAllButton.setBounds (topRow.removeFromRight (84));
+    topRow.removeFromRight (6);
+    stopButton.setBounds (topRow.removeFromRight (56));
 
     // 第二列：總音量
     auto volRow = r.removeFromTop (30);
@@ -456,7 +648,7 @@ void SoundboardComponent::resized()
     pageRow.removeFromLeft (6);
     delPageBtn.setBounds (pageRow.removeFromRight (64));
     addPageBtn.setBounds (pageRow.removeFromRight (64));
-    pageIndicator.setBounds (pageRow.removeFromRight (64));
+    pageIndicator.setBounds (pageRow.removeFromRight (120));
     pageNameLabel.setBounds (pageRow.reduced (6, 2));
 
     r.removeFromTop (10);
@@ -502,6 +694,13 @@ void SoundboardComponent::openDeviceSettings()
     o.launchAsync();
 }
 
+void SoundboardComponent::stopAllAction()
+{
+    engine.stopAll();
+    for (auto* p : pads)
+        p->onStopped();          // 重設各格的迴圈狀態
+}
+
 //==============================================================================
 //  存檔 / 載入 / 清空 / 熱鍵註冊
 //==============================================================================
@@ -526,6 +725,8 @@ void SoundboardComponent::savePads()
         settings->setValue ("name" + key, pads[i]->getCustomName());
         settings->setValue ("key"  + key, pads[i]->getHotkeyVk());
         settings->setValue ("mod"  + key, pads[i]->getHotkeyMods());
+        settings->setValue ("gain" + key, (double) pads[i]->getPadGain());
+        settings->setValue ("loop" + key, pads[i]->getLoopMode());
     }
     // 刪頁後清掉多餘的格子鍵
     for (int i = pads.size(); i < pads.size() + padsPerPage; ++i)
@@ -535,6 +736,8 @@ void SoundboardComponent::savePads()
         settings->removeValue ("name" + key);
         settings->removeValue ("key"  + key);
         settings->removeValue ("mod"  + key);
+        settings->removeValue ("gain" + key);
+        settings->removeValue ("loop" + key);
     }
 
     settings->saveIfNeeded();
@@ -570,6 +773,9 @@ void SoundboardComponent::loadPads()
         const int mods = settings->getIntValue ("mod" + key, 0);
         if (vk != 0)
             pads[i]->setHotkey (vk, mods);
+
+        pads[i]->setPadGain ((float) settings->getDoubleValue ("gain" + key, 1.0));
+        pads[i]->setLoopMode (settings->getBoolValue ("loop" + key, false));
     }
 }
 
@@ -594,6 +800,11 @@ bool SoundboardComponent::refreshHotkeys()
             if (! hotkeys.registerHotkey (i, vk, pads[i]->getHotkeyMods()))
                 allOk = false;
     }
+
+    if (stopHotkeyVk != 0)                       // 「停止全部」的熱鍵
+        if (! hotkeys.registerHotkey (kStopHotkeyId, stopHotkeyVk, stopHotkeyMods))
+            allOk = false;
+
     return allOk;
 }
 
@@ -630,8 +841,7 @@ void SoundboardComponent::setCurrentPage (int page)
 
     if (currentPage < pageNames.size())
         pageNameLabel.setText (pageNames[currentPage], juce::dontSendNotification);
-    pageIndicator.setText (juce::String (currentPage + 1) + " / " + juce::String (numPages),
-                           juce::dontSendNotification);
+    pageIndicator.setPageInfo (numPages, currentPage);
 
     prevPageBtn.setEnabled (currentPage > 0);
     nextPageBtn.setEnabled (currentPage < numPages - 1);

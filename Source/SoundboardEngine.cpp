@@ -165,7 +165,7 @@ void SoundboardEngine::audioDeviceAboutToStart (juce::AudioIODevice* device)
 void SoundboardEngine::audioDeviceStopped() {}
 
 //==============================================================================
-void SoundboardEngine::trigger (AudioClip::Ptr clip, float gain)
+void SoundboardEngine::trigger (AudioClip::Ptr clip, float gain, bool loop)
 {
     if (clip == nullptr)
         return;
@@ -178,10 +178,14 @@ void SoundboardEngine::trigger (AudioClip::Ptr clip, float gain)
     const int i = (size1 > 0) ? start1 : start2;
     triggerSlots[i].clip = std::move (clip);
     triggerSlots[i].gain = gain;
+    triggerSlots[i].loop = loop;
     triggerFifo.finishedWrite (1);
 }
 
-void SoundboardEngine::startVoice (AudioClip::Ptr clip, float gain)
+void SoundboardEngine::stopAll()                  { stopAllFlag.store (true); }
+void SoundboardEngine::stopClip (AudioClip* clip) { stopClipPtr.store (clip); }
+
+void SoundboardEngine::startVoice (AudioClip::Ptr clip, float gain, bool loop)
 {
     for (auto& v : voices)
     {
@@ -190,6 +194,7 @@ void SoundboardEngine::startVoice (AudioClip::Ptr clip, float gain)
             v.clip     = std::move (clip);
             v.position = 0.0;
             v.gain     = gain;
+            v.loop     = loop;
             v.active   = true;
             return;
         }
@@ -209,10 +214,16 @@ void SoundboardEngine::audioDeviceIOCallbackWithContext (const float* const* inp
     {
         int start1, size1, start2, size2;
         triggerFifo.prepareToRead (numReady, start1, size1, start2, size2);
-        for (int n = 0; n < size1; ++n) startVoice (std::move (triggerSlots[start1 + n].clip), triggerSlots[start1 + n].gain);
-        for (int n = 0; n < size2; ++n) startVoice (std::move (triggerSlots[start2 + n].clip), triggerSlots[start2 + n].gain);
+        for (int n = 0; n < size1; ++n) startVoice (std::move (triggerSlots[start1 + n].clip), triggerSlots[start1 + n].gain, triggerSlots[start1 + n].loop);
+        for (int n = 0; n < size2; ++n) startVoice (std::move (triggerSlots[start2 + n].clip), triggerSlots[start2 + n].gain, triggerSlots[start2 + n].loop);
         triggerFifo.finishedRead (size1 + size2);
     }
+
+    // 停止請求
+    if (stopAllFlag.exchange (false))
+        for (auto& v : voices) { v.active = false; v.clip = nullptr; }
+    if (auto* sc = stopClipPtr.exchange (nullptr))
+        for (auto& v : voices) if (v.clip.get() == sc) { v.active = false; v.clip = nullptr; }
 
     const int n = juce::jmin (numSamples, sfxScratch.getNumSamples());
 
@@ -240,9 +251,13 @@ void SoundboardEngine::audioDeviceIOCallbackWithContext (const float* const* inp
 
         for (int i = 0; i < n; ++i)
         {
-            const int idx = (int) v.position;
-            if (idx >= srcLen - 1) { v.active = false; v.clip = nullptr; break; }
+            if ((int) v.position >= srcLen - 1)
+            {
+                if (v.loop) v.position = 0.0;                          // 迴圈：回到開頭
+                else { v.active = false; v.clip = nullptr; break; }    // 一般：播完停止
+            }
 
+            const int   idx  = (int) v.position;
             const float frac = (float) (v.position - idx);
             sfxL[i] += (s0[idx] + frac * (s0[idx + 1] - s0[idx])) * v.gain * master;
             sfxR[i] += (s1[idx] + frac * (s1[idx + 1] - s1[idx])) * v.gain * master;

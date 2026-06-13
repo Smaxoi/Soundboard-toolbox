@@ -36,7 +36,9 @@ public:
     juce::AudioDeviceManager& getDeviceManager() { return deviceManager; }
 
     AudioClip::Ptr loadClip (const juce::File& file, juce::String& errorMessage);
-    void trigger (AudioClip::Ptr clip, float gain = 1.0f);
+    void trigger (AudioClip::Ptr clip, float gain = 1.0f, bool loop = false);
+    void stopAll();                          // 停掉所有正在播的音效
+    void stopClip (AudioClip* clip);         // 停掉某一段（給迴圈再按一下停用）
 
     void  setMasterGain (float g) { masterGain.store (juce::jlimit (0.0f, 1.0f, g)); }
     float getMasterGain() const   { return masterGain.load(); }
@@ -69,8 +71,8 @@ public:
 
 private:
     //==========================================================================
-    struct Voice   { AudioClip::Ptr clip; double position = 0.0; float gain = 1.0f; bool active = false; };
-    struct Trigger { AudioClip::Ptr clip; float gain = 1.0f; };
+    struct Voice   { AudioClip::Ptr clip; double position = 0.0; float gain = 1.0f; bool loop = false; bool active = false; };
+    struct Trigger { AudioClip::Ptr clip; float gain = 1.0f; bool loop = false; };
 
     // 只放「音效」的立體聲環形緩衝（主執行緒寫、監聽執行緒讀；無鎖 SPSC）
     struct StereoFifo
@@ -100,7 +102,7 @@ private:
         std::vector<float> tmpR;
     };
 
-    void         startVoice (AudioClip::Ptr clip, float gain);
+    void         startVoice (AudioClip::Ptr clip, float gain, bool loop);
     juce::String resolveFFmpeg() const;
     juce::File   transcodeWithFFmpeg (const juce::File& src, juce::String& errorMessage);
 
@@ -118,6 +120,8 @@ private:
 
     std::atomic<float> masterGain     { 0.8f };
     std::atomic<bool>  micPassthrough { true };
+    std::atomic<bool>        stopAllFlag { false };   // 要求清掉所有 voice
+    std::atomic<AudioClip*>  stopClipPtr { nullptr };  // 要求停掉某段
 
     // 麥克風降噪狀態（只在音訊執行緒讀寫 gate 狀態）
     std::atomic<bool>            noiseReduction { true };
