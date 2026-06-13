@@ -22,6 +22,9 @@ public:
     void resized() override;
     void paint (juce::Graphics&) override;
 
+    std::function<void()> onBack;                    // 由外殼設定：返回主選單
+    SoundboardEngine& getEngine() { return engine; } // 共用給其他模組(如 TTS)
+
 private:
     //==========================================================================
     /** 單一音效格。空的顯示「+」，點一下載入；載入後點一下播放；右鍵選單可設熱鍵/清除。 */
@@ -135,11 +138,14 @@ private:
 
         void paint (juce::Graphics& g) override
         {
-            const float r       = 4.0f;
-            const float spacing = 16.0f;
-            const float totalW  = (numPages - 1) * spacing;
-            const float startX  = getWidth()  * 0.5f - totalW * 0.5f;
-            const float cy      = getHeight() * 0.5f;
+            // 間距自動縮放，讓很多頁也塞得下整條寬度
+            float spacing = 16.0f;
+            if (numPages > 1)
+                spacing = juce::jlimit (5.0f, 16.0f, (getWidth() - 24.0f) / (float) (numPages - 1));
+            const float r      = juce::jmin (4.0f, spacing * 0.45f);
+            const float totalW = (numPages - 1) * spacing;
+            const float startX = getWidth()  * 0.5f - totalW * 0.5f;
+            const float cy     = getHeight() * 0.5f;
 
             // 每頁一個灰色小點
             g.setColour (juce::Colours::white.withAlpha (0.35f));
@@ -203,6 +209,7 @@ private:
     juce::Label       title;
     juce::Label       masterLabel;
     juce::Slider      masterVolume;
+    juce::TextButton  backButton     { juce::CharPointer_UTF8 ("← 主選單") };
     juce::TextButton  clearAllButton { juce::CharPointer_UTF8 ("清除全部") };
     juce::TextButton  deviceButton   { juce::CharPointer_UTF8 ("音訊裝置設定…") };
     HotkeyButton      stopButton     { juce::CharPointer_UTF8 ("停止") };

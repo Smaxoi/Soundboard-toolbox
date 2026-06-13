@@ -29,9 +29,11 @@ juce_generate_juce_header(Soundboard)
 
 target_sources(Soundboard PRIVATE
     Source/Main.cpp
+    Source/MainComponent.cpp
     Source/SoundboardEngine.cpp
     Source/SoundboardComponent.cpp
-    Source/GlobalHotkeys.cpp)
+    Source/GlobalHotkeys.cpp
+    Source/TTSComponent.cpp)
 
 target_compile_definitions(Soundboard PRIVATE
     JUCE_WEB_BROWSER=0

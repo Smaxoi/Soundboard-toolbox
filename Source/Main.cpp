@@ -1,5 +1,5 @@
 #include <JuceHeader.h>
-#include "SoundboardComponent.h"
+#include "MainComponent.h"
 
 //==============================================================================
 // 程式進入點：建立一個視窗，把音效板元件放進去。
@@ -15,8 +15,8 @@ public:
         // 指定預設字型為含中文字符的「微軟正黑體」，避免中文顯示成方框。
         juce::LookAndFeel::getDefaultLookAndFeel().setDefaultSansSerifTypefaceName ("Microsoft JhengHei UI");
 
-        mainWindow.reset (new MainWindow (juce::CharPointer_UTF8 ("VoiceMod 音效板"),
-                                          new SoundboardComponent(), *this));
+        mainWindow.reset (new MainWindow (juce::CharPointer_UTF8 ("VoiceMod 工具箱"),
+                                          new MainComponent(), *this));
     }
 
     void shutdown() override { mainWindow = nullptr; }

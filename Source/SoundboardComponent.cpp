@@ -489,7 +489,10 @@ SoundboardComponent::SoundboardComponent()
             pads[id]->play();
     };
 
-    title.setText (utf8 ("音效板  Soundboard"), juce::dontSendNotification);
+    backButton.onClick = [this] { if (onBack) onBack(); };
+    addAndMakeVisible (backButton);
+
+    title.setText (utf8 ("音效板"), juce::dontSendNotification);
     title.setFont (juce::Font (22.0f, juce::Font::bold));
     addAndMakeVisible (title);
 
@@ -588,7 +591,7 @@ SoundboardComponent::SoundboardComponent()
     currentPage = juce::jlimit (0, numPages - 1, settings->getIntValue ("currentPage", 0));
     setCurrentPage (currentPage);
 
-    setSize (640, 640);
+    setSize (640, 670);
 }
 
 SoundboardComponent::~SoundboardComponent()
@@ -616,14 +619,16 @@ void SoundboardComponent::resized()
 {
     auto r = getLocalBounds().reduced (12);
 
-    // 第一列：標題 + 停止 + 清除全部 + 裝置設定
+    // 第一列：返回 + 標題 + 停止 + 清除全部 + 裝置設定
     auto topRow = r.removeFromTop (34);
-    title.setBounds (topRow.removeFromLeft (160));
-    deviceButton.setBounds (topRow.removeFromRight (130));
+    backButton.setBounds (topRow.removeFromLeft (84));
+    topRow.removeFromLeft (6);
+    title.setBounds (topRow.removeFromLeft (90));
+    deviceButton.setBounds (topRow.removeFromRight (124));
     topRow.removeFromRight (6);
-    clearAllButton.setBounds (topRow.removeFromRight (84));
+    clearAllButton.setBounds (topRow.removeFromRight (80));
     topRow.removeFromRight (6);
-    stopButton.setBounds (topRow.removeFromRight (56));
+    stopButton.setBounds (topRow.removeFromRight (52));
 
     // 第二列：總音量
     auto volRow = r.removeFromTop (30);
@@ -641,17 +646,19 @@ void SoundboardComponent::resized()
     gateLabel.setBounds (gateRow.removeFromLeft (70));
     gateSlider.setBounds (gateRow.reduced (6, 0));
 
-    // 第五列：頁面切換
+    // 頁面控制列：◀ ▶ 名稱 ＋頁 刪頁
     auto pageRow = r.removeFromTop (30);
     prevPageBtn.setBounds (pageRow.removeFromLeft (40));
     nextPageBtn.setBounds (pageRow.removeFromLeft (40));
     pageRow.removeFromLeft (6);
     delPageBtn.setBounds (pageRow.removeFromRight (64));
     addPageBtn.setBounds (pageRow.removeFromRight (64));
-    pageIndicator.setBounds (pageRow.removeFromRight (120));
     pageNameLabel.setBounds (pageRow.reduced (6, 2));
 
-    r.removeFromTop (10);
+    // 圓點列：自己一整條，占滿寬度
+    pageIndicator.setBounds (r.removeFromTop (22));
+
+    r.removeFromTop (8);
 
     // 其餘空間：目前頁的按鈕格
     const int gap   = 8;
