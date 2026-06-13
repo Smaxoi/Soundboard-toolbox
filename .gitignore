@@ -1,0 +1,12 @@
+# 建置輸出
+build/
+out/
+cmake-build-*/
+
+# Visual Studio
+.vs/
+*.user
+
+# 產生的音檔
+*.wav
+!demo/**/*.wav
