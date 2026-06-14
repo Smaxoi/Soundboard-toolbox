@@ -10,8 +10,8 @@
 
 ## 快速開始
 
-**我只想使用（拿到安裝檔）** 👉 看 **[INSTALL.md（安裝教學）](INSTALL.md)**
-雙擊 `VoiceMod-Toolbox-Setup.exe` 安裝即可，免系統管理員、不需額外執行階段。
+**我只想使用** 👉 到 **[Releases 下載安裝檔](https://github.com/Smaxoi/Soundboard-toolbox/releases/latest)**，雙擊安裝即可（免系統管理員、不需額外執行階段）。
+安裝步驟與進階設定見 **[INSTALL.md（安裝教學）](INSTALL.md)**。
 
 **我要自己編譯（開發者）** 👉 看 **[BUILD.md（環境建置）](BUILD.md)**
 

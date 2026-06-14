@@ -11,7 +11,8 @@
 
 ## 一、安裝
 
-1. 取得安裝檔 **`VoiceMod-Toolbox-Setup.exe`**。
+1. **下載安裝檔**：[VoiceMod-Toolbox-Setup.exe](https://github.com/Smaxoi/Soundboard-toolbox/releases/latest/download/VoiceMod-Toolbox-Setup.exe)
+   （或到 [Releases 頁面](https://github.com/Smaxoi/Soundboard-toolbox/releases) 選版本）。
 2. **雙擊**它。
 3. 若出現藍色的「**Windows 已保護你的電腦 (SmartScreen)**」視窗 → 點「**其他資訊**」→「**仍要執行**」。
    > 這是因為程式**未經數位簽章**（不是病毒），個人軟體很常見。
