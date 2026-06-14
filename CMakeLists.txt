@@ -5,6 +5,11 @@ project(VoiceModSoundboard VERSION 0.1.0 LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# 散佈用：靜態連結 MSVC 執行階段 -> 產出的 exe 不需要 Visual C++ Redistributable
+if (MSVC)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
+
 # ---------------------------------------------------------------------------
 # 自動下載 JUCE（第一次 build 會從 GitHub 拉下來，需幾分鐘）
 # ---------------------------------------------------------------------------

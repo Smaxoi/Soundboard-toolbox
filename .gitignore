@@ -1,6 +1,7 @@
 # 建置輸出
 build/
 out/
+dist/
 cmake-build-*/
 
 # Visual Studio

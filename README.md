@@ -10,15 +10,19 @@
 
 ## 快速開始
 
-1. 裝 **Visual Studio 2022** + 勾「使用 C++ 的桌面開發」工作負載。
-2. 用 VS 開這個資料夾，或在「Developer PowerShell for VS 2022」執行：
-   ```powershell
-   cmake -B build -G "Visual Studio 17 2022" -A x64
-   cmake --build build --config Release
-   ```
-3. 執行 `build\Soundboard_artefacts\Release\Soundboard.exe`。
+**我只想使用（拿到安裝檔）** 👉 看 **[INSTALL.md（安裝教學）](INSTALL.md)**
+雙擊 `VoiceMod-Toolbox-Setup.exe` 安裝即可，免系統管理員、不需額外執行階段。
 
-👉 **完整的環境建置、Discord 音訊路由、選用相依 (ffmpeg / VB-Cable)、疑難排解，請看 [BUILD.md](BUILD.md)。**
+**我要自己編譯（開發者）** 👉 看 **[BUILD.md（環境建置）](BUILD.md)**
+
+```powershell
+# 在「Developer PowerShell for VS 2022」裡：
+cmake -B build -G "Visual Studio 17 2022" -A x64
+cmake --build build --config Release
+# 產物：build\Soundboard_artefacts\Release\Soundboard.exe
+```
+
+**製作安裝檔**：先編譯，再用 Inno Setup 編譯 `installer/voicemod.iss` → `dist/VoiceMod-Toolbox-Setup.exe`。
 
 ## 程式結構
 
